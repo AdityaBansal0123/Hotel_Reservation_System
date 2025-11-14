@@ -5,7 +5,7 @@ FROM jenkins/jenkins:lts
 USER root
 
 # === STEP 1: Install Prerequisites, Python, Docker CLI, and GCloud SDK ===
-# Combine all package installations into a single efficient layer.
+# Combine all package installations and setup steps into a single efficient layer.
 RUN apt-get update -y && \
     apt-get install -y apt-transport-https ca-certificates curl gnupg python3 python3-venv && \
     \
@@ -16,7 +16,7 @@ RUN apt-get update -y && \
     # 2. Download Docker's official GPG key and store it
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
     \
-    # 3. Add the Docker repository (using 'signed-by' syntax)
+    # 3. Add the Docker repository
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bullseye stable" > /etc/apt/sources.list.d/docker.list && \
     \
     # --- Google Cloud SDK Setup ---
@@ -32,9 +32,24 @@ RUN apt-get update -y && \
     # Clean up to reduce image size
     apt-get clean
 
-# === STEP 2: Setup Jenkins User Permissions ===
-# Create the docker group (GID 999 is common) and add the jenkins user to it.
-RUN groupadd -g 999 docker || true && \
+# ---
+
+# === STEP 2: Setup Jenkins User Permissions (Final GID Fix for GID 1000) ===
+# This script ensures the 'docker' group has GID 1000 (matching the host's socket)
+# and adds the 'jenkins' user to it, handling conflicts if GID 1000 is taken by another group.
+RUN DOCKER_GID=1000; \
+    CURRENT_GROUP=$(getent group $DOCKER_GID | cut -d: -f1); \
+    # If GID 1000 is taken by a group that IS NOT 'docker', rename/renumber that group
+    if [ "$CURRENT_GROUP" != "" ] && [ "$CURRENT_GROUP" != "docker" ]; then \
+        echo "Renumbering conflicting group $CURRENT_GROUP from GID 1000 to 2500"; \
+        groupmod -g 2500 $CURRENT_GROUP; \
+    fi; \
+    # Ensure the 'docker' group exists and has GID 1000
+    if ! getent group docker > /dev/null; then \
+        echo "Creating docker group with GID 1000"; \
+        groupadd -g $DOCKER_GID docker; \
+    fi; \
+    # Finally, add the jenkins user to the docker group
     usermod -aG docker jenkins
 
 # Switch back to the jenkins user
