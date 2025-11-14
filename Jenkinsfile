@@ -3,12 +3,12 @@ pipeline{
 
     environment {
         VENV_DIR = 'venv'
-        GCP_PROJECT = "	rare-bastion-464310-r6"
+        GCP_PROJECT = "rare-bastion-464310-r6"
         GCLOUD_PATH = "/var/jenkins_home/google-cloud-sdk/bin"
     }
 
     stages{
-        
+
         stage('Cloning Github repo to Jenkins'){
             steps{
                 script{
